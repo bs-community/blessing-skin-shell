@@ -1,4 +1,4 @@
-use crate::shell::{executable::Builtin, Arguments, Executables, Variables};
+use crate::shell::{executable::Builtin, Arguments, EnvVars, Executables};
 use crate::terminal::Terminal;
 
 pub struct False;
@@ -14,7 +14,7 @@ impl Builtin for False {
         &self,
         _: &Terminal,
         _: Option<&mut Executables>,
-        _: Option<&mut Variables>,
+        _: Option<&mut EnvVars>,
         _: Option<Arguments>,
     ) -> u8 {
         1

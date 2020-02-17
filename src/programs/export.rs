@@ -1,4 +1,4 @@
-use crate::shell::{executable::Builtin, Argument, Arguments, Executables, Variables};
+use crate::shell::{executable::Builtin, Argument, Arguments, EnvVars, Executables};
 use crate::terminal::Terminal;
 use ansi_term::Color;
 
@@ -21,7 +21,7 @@ impl Builtin for Export {
         &self,
         terminal: &Terminal,
         _: Option<&mut Executables>,
-        globals: Option<&mut Variables>,
+        globals: Option<&mut EnvVars>,
         arguments: Option<Arguments>,
     ) -> u8 {
         match globals {

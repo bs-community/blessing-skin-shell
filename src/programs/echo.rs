@@ -1,4 +1,4 @@
-use crate::shell::{executable::Builtin, Argument, Arguments, Executables, Variables};
+use crate::shell::{executable::Builtin, Argument, Arguments, EnvVars, Executables};
 use crate::terminal::Terminal;
 
 pub struct Echo;
@@ -14,7 +14,7 @@ impl Builtin for Echo {
         &self,
         terminal: &Terminal,
         _: Option<&mut Executables>,
-        _: Option<&mut Variables>,
+        _: Option<&mut EnvVars>,
         arguments: Option<Arguments>,
     ) -> u8 {
         if let Some(arguments) = arguments {

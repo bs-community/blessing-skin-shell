@@ -17,7 +17,7 @@ use transform::Transformer;
 use wasm_bindgen::prelude::*;
 
 pub type Executables = HashMap<String, Box<dyn Fn() -> Program>>;
-pub type Variables = HashMap<String, String>;
+pub type EnvVars = HashMap<String, String>;
 pub type Arguments = Vec<transform::Argument>;
 
 #[wasm_bindgen]
@@ -26,7 +26,7 @@ pub struct Shell {
     line_cursor: usize,
     terminal: Terminal,
     executables: Rc<Executables>,
-    globals: Rc<Variables>,
+    globals: Rc<EnvVars>,
     history: History,
     suggestion: Option<String>,
 }
