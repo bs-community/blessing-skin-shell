@@ -103,6 +103,199 @@ fn parse_variable() {
 }
 
 #[test]
+fn parse_template_literal_with_quoted() {
+    let result = template_literal(true)
+        .parse(source("abc'def #$"))
+        .map(|x| (x.0, x.1.input));
+    assert_eq!(
+        result,
+        Ok((
+            TemplateLiteral {
+                value: "abc'def #".to_string(),
+                span: Span {
+                    start: Position {
+                        line: 1,
+                        column: 1,
+                        index: 0
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 10,
+                        index: 9
+                    }
+                }
+            },
+            "$"
+        ))
+    )
+}
+
+#[test]
+fn parse_template_literal_with_unquoted() {
+    let result = template_literal(false)
+        .parse(source("abc "))
+        .map(|x| (x.0, x.1.input));
+    assert_eq!(
+        result,
+        Ok((
+            TemplateLiteral {
+                value: "abc".to_string(),
+                span: Span {
+                    start: Position {
+                        line: 1,
+                        column: 1,
+                        index: 0
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 4,
+                        index: 3
+                    }
+                }
+            },
+            " "
+        ))
+    )
+}
+
+#[test]
+fn parse_single_dollar() {
+    let result = single_dollar()
+        .parse(source("$$"))
+        .map(|x| (x.0, x.1.input));
+    assert_eq!(
+        result,
+        Ok((
+            TemplateLiteral {
+                value: "$".to_string(),
+                span: Span {
+                    start: Position {
+                        line: 1,
+                        column: 1,
+                        index: 0
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 2,
+                        index: 1
+                    }
+                }
+            },
+            "$"
+        ))
+    )
+}
+
+#[test]
+fn parse_template_body_with_quoted() {
+    let result = template_body(true).parse(source("")).map(|x| x.0);
+    assert_eq!(
+        result,
+        Ok(TemplateBody {
+            parts: vec![],
+            span: Span {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                    index: 0,
+                },
+                end: Position {
+                    line: 1,
+                    column: 1,
+                    index: 0,
+                }
+            }
+        })
+    );
+
+    let result = template_body(true).parse(source("ab$$what")).map(|x| x.0);
+    assert_eq!(
+        result,
+        Ok(TemplateBody {
+            parts: vec![
+                TemplatePart::Raw(TemplateLiteral {
+                    value: "ab".to_string(),
+                    span: Span {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                            index: 0,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 3,
+                            index: 2,
+                        }
+                    }
+                }),
+                TemplatePart::Raw(TemplateLiteral {
+                    value: "$".to_string(),
+                    span: Span {
+                        start: Position {
+                            line: 1,
+                            column: 3,
+                            index: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 4,
+                            index: 3,
+                        }
+                    }
+                }),
+                TemplatePart::Variable(Variable {
+                    id: Identifier {
+                        name: "what".to_string(),
+                        span: Span {
+                            start: Position {
+                                line: 1,
+                                column: 5,
+                                index: 4,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 9,
+                                index: 8,
+                            }
+                        }
+                    },
+                    span: Span {
+                        start: Position {
+                            line: 1,
+                            column: 4,
+                            index: 3,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 9,
+                            index: 8,
+                        }
+                    }
+                }),
+            ],
+            span: Span {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                    index: 0,
+                },
+                end: Position {
+                    line: 1,
+                    column: 9,
+                    index: 8,
+                }
+            }
+        })
+    );
+}
+
+#[test]
+fn parse_template_body_with_unquoted() {
+    let result = template_body(false).parse(source(""));
+    assert!(result.is_err());
+}
+
+#[test]
 fn parse_comment() {
     let result = comment()
         .parse(source("# abc\ndef"))
