@@ -2,7 +2,7 @@ pub(crate) mod ast;
 mod pos;
 
 #[cfg(test)]
-mod test;
+mod tests;
 
 use ast::*;
 use combine::{
