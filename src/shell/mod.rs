@@ -16,7 +16,7 @@ pub use transform::Argument;
 use transform::Transformer;
 use wasm_bindgen::prelude::*;
 
-pub type Executables = HashMap<String, Program>;
+pub type Executables = HashMap<String, Box<dyn Fn() -> Program>>;
 pub type Variables = HashMap<String, String>;
 pub type Arguments = Vec<transform::Argument>;
 
@@ -35,26 +35,26 @@ pub struct Shell {
 impl Shell {
     #[wasm_bindgen(constructor)]
     pub fn new(terminal: Terminal) -> Shell {
-        let mut executables = HashMap::with_capacity(10);
+        let mut executables: HashMap<String, Box<dyn Fn() -> Program>> = HashMap::with_capacity(10);
         executables.insert(
             "clear".to_string(),
-            Program::Builtin(Box::new(programs::Clear::default())),
+            Box::new(|| Program::Builtin(Box::new(programs::Clear::default()))),
         );
         executables.insert(
             "echo".to_string(),
-            Program::Builtin(Box::new(programs::Echo::default())),
+            Box::new(|| Program::Builtin(Box::new(programs::Echo::default()))),
         );
         executables.insert(
             "true".to_string(),
-            Program::Builtin(Box::new(programs::True::default())),
+            Box::new(|| Program::Builtin(Box::new(programs::True::default()))),
         );
         executables.insert(
             "false".to_string(),
-            Program::Builtin(Box::new(programs::False::default())),
+            Box::new(|| Program::Builtin(Box::new(programs::False::default()))),
         );
         executables.insert(
             "export".to_string(),
-            Program::Builtin(Box::new(programs::Export::default())),
+            Box::new(|| Program::Builtin(Box::new(programs::Export::default()))),
         );
 
         let mut globals = HashMap::with_capacity(3);
@@ -260,7 +260,12 @@ impl Shell {
 
     fn run_command(&mut self, command: Command) {
         let name = &command.program.id.name;
-        match Rc::clone(&self.executables).get(name) {
+        let program = {
+            let executables = Rc::clone(&self.executables);
+            let get_program = &executables.get(name);
+            get_program.map(|get| get())
+        };
+        match program {
             Some(program) => {
                 let exit_code = {
                     let arguments = {
