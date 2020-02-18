@@ -1,4 +1,4 @@
-use super::{Arguments, EnvVars, Executables};
+use super::{Arguments, Executables, Vars};
 use crate::terminal::Terminal;
 
 #[allow(dead_code)]
@@ -13,13 +13,13 @@ pub trait Builtin {
         &self,
         terminal: &Terminal,
         executables: &mut Executables,
-        globals: &mut EnvVars,
-        arguments: Option<Arguments>,
+        globals: &mut Vars,
+        arguments: Arguments,
     ) -> u8;
 }
 
 pub trait Internal {
-    fn run(&self, arguments: Option<Arguments>) -> u8;
+    fn run(&self, arguments: Arguments) -> u8;
 }
 
 pub trait External {

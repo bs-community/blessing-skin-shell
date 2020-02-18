@@ -1,4 +1,4 @@
-use crate::shell::{executable::Builtin, Arguments, EnvVars, Executables};
+use crate::shell::{executable::Builtin, Arguments, Executables, Vars};
 use crate::terminal::Terminal;
 
 pub struct False;
@@ -10,7 +10,7 @@ impl Default for False {
 }
 
 impl Builtin for False {
-    fn run(&self, _: &Terminal, _: &mut Executables, _: &mut EnvVars, _: Option<Arguments>) -> u8 {
+    fn run(&self, _: &Terminal, _: &mut Executables, _: &mut Vars, _: Arguments) -> u8 {
         1
     }
 }

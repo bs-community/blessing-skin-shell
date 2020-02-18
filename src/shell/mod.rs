@@ -16,7 +16,7 @@ use transform::Transformer;
 use wasm_bindgen::prelude::*;
 
 pub type Executables = HashMap<String, Box<dyn Fn() -> Program>>;
-pub type EnvVars = HashMap<String, String>;
+pub type Vars = HashMap<String, String>;
 pub type Arguments = Vec<transform::Argument>;
 
 #[wasm_bindgen]
@@ -25,7 +25,7 @@ pub struct Shell {
     line_cursor: usize,
     terminal: Terminal,
     executables: Executables,
-    globals: EnvVars,
+    globals: Vars,
     history: History,
     suggestion: Option<String>,
 }
@@ -259,17 +259,15 @@ impl Shell {
 
     fn run_command(&mut self, command: Command) {
         let name = &command.program.id.name;
-        let program = {
-            let get_program = self.executables.get(name);
-            get_program.map(|get| get())
-        };
+        let program = self.executables.get(name).map(|getter| getter());
         match program {
             Some(program) => {
                 let exit_code = {
-                    let arguments = {
-                        let transformer = Transformer::from(&self.globals);
-                        command.parameters.map(|p| transformer.transform(p))
-                    };
+                    let transformer = Transformer::from(&self.globals);
+                    let arguments = command
+                        .parameters
+                        .map(|p| transformer.transform(p))
+                        .unwrap_or_default();
                     match program {
                         Program::Builtin(program) => program.run(
                             &self.terminal,

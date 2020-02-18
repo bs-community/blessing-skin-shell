@@ -1,4 +1,4 @@
-use super::EnvVars;
+use super::Vars;
 use crate::parser::ast::*;
 
 pub enum Argument {
@@ -7,11 +7,11 @@ pub enum Argument {
 }
 
 pub struct Transformer<'a> {
-    variables: &'a EnvVars,
+    variables: &'a Vars,
 }
 
-impl<'a> From<&'a EnvVars> for Transformer<'a> {
-    fn from(variables: &EnvVars) -> Transformer {
+impl<'a> From<&'a Vars> for Transformer<'a> {
+    fn from(variables: &Vars) -> Transformer {
         Transformer { variables }
     }
 }

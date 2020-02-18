@@ -1,4 +1,4 @@
-use crate::shell::{executable::Builtin, Argument, Arguments, EnvVars, Executables};
+use crate::shell::{executable::Builtin, Argument, Arguments, Executables, Vars};
 use crate::terminal::Terminal;
 
 pub struct Echo;
@@ -14,23 +14,21 @@ impl Builtin for Echo {
         &self,
         terminal: &Terminal,
         _: &mut Executables,
-        _: &mut EnvVars,
-        arguments: Option<Arguments>,
+        _: &mut Vars,
+        arguments: Arguments,
     ) -> u8 {
-        if let Some(arguments) = arguments {
-            for argument in &arguments {
-                match argument {
-                    Argument::Text(value) => terminal.write(&value),
-                    Argument::Switch(key, value) => {
-                        terminal.write(key);
-                        terminal.write("=");
-                        terminal.write(value.as_deref().unwrap_or(""));
-                    }
+        arguments.iter().for_each(|argument| {
+            match argument {
+                Argument::Text(value) => terminal.write(&value),
+                Argument::Switch(key, value) => {
+                    terminal.write(key);
+                    terminal.write("=");
+                    terminal.write(value.as_deref().unwrap_or(""));
                 }
-                terminal.write(" ");
             }
-            terminal.write("\r\n");
-        }
+            terminal.write(" ");
+        });
+        terminal.write("\r\n");
         0
     }
 }
