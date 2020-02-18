@@ -11,7 +11,6 @@ use ansi_term::Color;
 use executable::Program;
 use history::History;
 use std::collections::HashMap;
-use std::rc::Rc;
 pub use transform::Argument;
 use transform::Transformer;
 use wasm_bindgen::prelude::*;
@@ -25,8 +24,8 @@ pub struct Shell {
     line: String,
     line_cursor: usize,
     terminal: Terminal,
-    executables: Rc<Executables>,
-    globals: Rc<EnvVars>,
+    executables: Executables,
+    globals: EnvVars,
     history: History,
     suggestion: Option<String>,
 }
@@ -64,8 +63,8 @@ impl Shell {
             terminal,
             line: String::with_capacity(12),
             line_cursor: 0,
-            executables: Rc::new(executables),
-            globals: Rc::new(globals),
+            executables,
+            globals,
             history: History::new(),
             suggestion: None,
         };
@@ -208,7 +207,7 @@ impl Shell {
     }
 
     fn render_command(&self, command: Command) {
-        self.print(&renderer::command(&command, &Rc::clone(&self.executables)));
+        self.print(&renderer::command(&command, &self.executables));
         if command.parameters.is_none() {
             self.white_space(self.line_cursor - command.program.span.end.index);
         }
@@ -261,33 +260,29 @@ impl Shell {
     fn run_command(&mut self, command: Command) {
         let name = &command.program.id.name;
         let program = {
-            let executables = Rc::clone(&self.executables);
-            let get_program = &executables.get(name);
+            let get_program = self.executables.get(name);
             get_program.map(|get| get())
         };
         match program {
             Some(program) => {
                 let exit_code = {
                     let arguments = {
-                        let globals = Rc::clone(&self.globals);
-                        let transformer = Transformer::from(&*globals);
+                        let transformer = Transformer::from(&self.globals);
                         command.parameters.map(|p| transformer.transform(p))
                     };
                     match program {
                         Program::Builtin(program) => program.run(
                             &self.terminal,
-                            Rc::get_mut(&mut self.executables),
-                            Rc::get_mut(&mut self.globals),
+                            &mut self.executables,
+                            &mut self.globals,
                             arguments,
                         ),
                         Program::Internal(_) => 0,
                         Program::External(_) => 0,
                     }
                 };
-                if let Some(globals) = Rc::get_mut(&mut self.globals) {
-                    if let Some(var) = globals.get_mut("?") {
-                        *var = format!("{}", exit_code);
-                    }
+                if let Some(var) = self.globals.get_mut("?") {
+                    *var = format!("{}", exit_code);
                 }
             }
             None => {
@@ -295,10 +290,8 @@ impl Shell {
                     "bsh: command not found: {}",
                     Color::Red.paint(name)
                 ));
-                if let Some(globals) = Rc::get_mut(&mut self.globals) {
-                    if let Some(var) = globals.get_mut("?") {
-                        *var = String::from("127");
-                    }
+                if let Some(var) = self.globals.get_mut("?") {
+                    *var = String::from("127");
                 }
             }
         }

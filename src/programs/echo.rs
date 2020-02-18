@@ -13,8 +13,8 @@ impl Builtin for Echo {
     fn run(
         &self,
         terminal: &Terminal,
-        _: Option<&mut Executables>,
-        _: Option<&mut EnvVars>,
+        _: &mut Executables,
+        _: &mut EnvVars,
         arguments: Option<Arguments>,
     ) -> u8 {
         if let Some(arguments) = arguments {

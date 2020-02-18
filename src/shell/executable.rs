@@ -12,8 +12,8 @@ pub trait Builtin {
     fn run(
         &self,
         terminal: &Terminal,
-        executables: Option<&mut Executables>,
-        globals: Option<&mut EnvVars>,
+        executables: &mut Executables,
+        globals: &mut EnvVars,
         arguments: Option<Arguments>,
     ) -> u8;
 }

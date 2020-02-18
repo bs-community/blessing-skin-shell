@@ -10,13 +10,7 @@ impl Default for True {
 }
 
 impl Builtin for True {
-    fn run(
-        &self,
-        _: &Terminal,
-        _: Option<&mut Executables>,
-        _: Option<&mut EnvVars>,
-        _: Option<Arguments>,
-    ) -> u8 {
+    fn run(&self, _: &Terminal, _: &mut Executables, _: &mut EnvVars, _: Option<Arguments>) -> u8 {
         0
     }
 }

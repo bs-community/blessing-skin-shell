@@ -13,8 +13,8 @@ impl Builtin for Clear {
     fn run(
         &self,
         terminal: &Terminal,
-        _: Option<&mut Executables>,
-        _: Option<&mut EnvVars>,
+        _: &mut Executables,
+        _: &mut EnvVars,
         _: Option<Arguments>,
     ) -> u8 {
         terminal.clear();
