@@ -9,45 +9,41 @@ fn white_space(size: usize) -> String {
 fn template(template: &Template) -> String {
     match template {
         Template::Unquoted(body) => {
-            let mut output = String::with_capacity(body.parts.len() * 5);
-            for (i, part) in body.parts.iter().enumerate() {
-                match part {
-                    TemplatePart::Raw(literal) => {
-                        // User may input a switch later, so paint it with light blue.
-                        if &literal.value == "-" && i == 0 {
-                            output.push_str(&Color::Fixed(39).paint("-").to_string());
-                        } else {
-                            output.push_str(&literal.value);
+            body.parts.iter().enumerate().fold(
+                String::with_capacity(body.parts.len() * 5),
+                |output, (i, part)| {
+                    output
+                        + &match part {
+                            TemplatePart::Raw(literal) => {
+                                // User may input a switch later, so paint it with light blue.
+                                if &literal.value == "-" && i == 0 {
+                                    Color::Fixed(39).paint("-").to_string()
+                                } else {
+                                    literal.value.to_owned()
+                                }
+                            }
+                            TemplatePart::Variable(var) => variable(var),
                         }
-                    }
-                    TemplatePart::Variable(var) => {
-                        output.push_str(&variable(var));
-                    }
-                }
-            }
-
-            output
+                },
+            )
         }
         Template::Single(raw) => Color::Yellow.paint(format!("'{}'", raw.text)).to_string(),
         Template::Double(body) => {
-            let mut output = String::with_capacity(body.parts.len() * 5);
+            let middle = body.parts.iter().fold(
+                String::with_capacity(body.parts.len() * 5),
+                |output, part| {
+                    output
+                        + &match part {
+                            TemplatePart::Raw(literal) => {
+                                Color::Yellow.paint(&literal.value).to_string()
+                            }
+                            TemplatePart::Variable(var) => variable(var),
+                        }
+                },
+            );
 
-            output.push_str(&Color::Yellow.paint("\"").to_string());
-
-            for part in &body.parts {
-                match part {
-                    TemplatePart::Raw(literal) => {
-                        output.push_str(&Color::Yellow.paint(&literal.value).to_string());
-                    }
-                    TemplatePart::Variable(var) => {
-                        output.push_str(&variable(var));
-                    }
-                }
-            }
-
-            output.push_str(&Color::Yellow.paint("\"").to_string());
-
-            output
+            let quote = Color::Yellow.paint("\"");
+            format!("{}{}{}", quote, middle, quote)
         }
     }
 }
@@ -79,16 +75,16 @@ fn parameter(parameter: &Parameter) -> String {
 }
 
 fn parameters(parameters: &Parameters, prefix_spaces: usize) -> String {
-    let mut index = prefix_spaces;
-    let mut output = String::new();
-
-    for param in &parameters.params {
-        output.push_str(&white_space(param.span.start.index - index));
-        output.push_str(&parameter(param));
-        index = param.span.end.index;
-    }
-
-    output
+    parameters
+        .params
+        .iter()
+        .fold((prefix_spaces, String::new()), |(pos, output), param| {
+            (
+                param.span.end.index,
+                output + &white_space(param.span.start.index - pos) + &parameter(param),
+            )
+        })
+        .1
 }
 
 fn program<T>(program: &Program, executables: &HashMap<String, T>) -> String {

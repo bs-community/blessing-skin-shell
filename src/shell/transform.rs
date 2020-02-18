@@ -76,17 +76,12 @@ impl<'a> Transformer<'a> {
     }
 
     fn template_body(&self, body: TemplateBody) -> String {
-        let mut text = String::new();
-
-        for part in body.parts {
-            let t = match part {
+        body.parts.into_iter().fold(String::new(), |text, part| {
+            text + &match part {
                 TemplatePart::Raw(raw) => self.template_literal(raw),
                 TemplatePart::Variable(var) => self.variable(var),
-            };
-            text.push_str(&*t);
-        }
-
-        text
+            }
+        })
     }
 
     fn template_literal(&self, literal: TemplateLiteral) -> String {

@@ -55,8 +55,6 @@ impl Positioner<char> for Position {
 
 impl<'a> RangePositioner<char, &'a str> for Position {
     fn update_range(&mut self, range: &&'a str) {
-        for c in range.chars() {
-            self.update(&c);
-        }
+        range.chars().for_each(|c| self.update(&c));
     }
 }
