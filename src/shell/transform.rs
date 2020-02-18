@@ -8,15 +8,17 @@ pub enum Argument {
 
 pub struct Transformer<'a> {
     variables: &'a Vars,
-}
-
-impl<'a> From<&'a Vars> for Transformer<'a> {
-    fn from(variables: &Vars) -> Transformer {
-        Transformer { variables }
-    }
+    text_only: bool,
 }
 
 impl<'a> Transformer<'a> {
+    pub fn new(variables: &Vars, text_only: bool) -> Transformer {
+        Transformer {
+            variables,
+            text_only,
+        }
+    }
+
     pub fn transform(&self, parameters: Parameters) -> Vec<Argument> {
         parameters
             .params
@@ -30,14 +32,16 @@ impl<'a> Transformer<'a> {
 
         match param {
             Param::Literal(literal) => Argument::Text(self.template(literal.literal)),
-            Param::LongSwitch(switch) => {
-                let (key, value) = self.switch_to_pair(switch);
-                Argument::Switch(key, value)
-            }
-            Param::ShortSwitch(switch) => {
-                let (key, value) = self.switch_to_pair(switch);
-                Argument::Switch(key, value)
-            }
+            Param::LongSwitch(switch) | Param::ShortSwitch(switch) => self.switch(switch),
+        }
+    }
+
+    fn switch(&self, switch: Switch) -> Argument {
+        if self.text_only {
+            Argument::Text(self.switch_to_text(switch))
+        } else {
+            let pair = self.switch_to_pair(switch);
+            Argument::Switch(pair.0, pair.1)
         }
     }
 
@@ -46,6 +50,17 @@ impl<'a> Transformer<'a> {
         let value = switch.value.map(|tpl| self.template(tpl));
 
         (key, value)
+    }
+
+    fn switch_to_text(&self, switch: Switch) -> String {
+        format!(
+            "{}={}",
+            switch.name.name,
+            switch
+                .value
+                .map(|tpl| self.template(tpl))
+                .unwrap_or_default()
+        )
     }
 
     fn template(&self, template: Template) -> String {
@@ -92,7 +107,7 @@ mod tests {
     #[test]
     fn transform_raw_text() {
         let variables = HashMap::new();
-        let transformer = Transformer::from(&variables);
+        let transformer = Transformer::new(&variables, false);
         let node = RawText {
             text: "text".to_string(),
             span: Span::default(),
@@ -104,7 +119,7 @@ mod tests {
     #[test]
     fn transform_template_literal() {
         let variables = HashMap::new();
-        let transformer = Transformer::from(&variables);
+        let transformer = Transformer::new(&variables, false);
         let node = TemplateLiteral {
             value: "text".to_string(),
             span: Span::default(),
@@ -117,7 +132,7 @@ mod tests {
     fn transform_variable() {
         let mut variables = HashMap::with_capacity(1);
         variables.insert("kumiko".to_string(), "reina".to_string());
-        let transformer = Transformer::from(&variables);
+        let transformer = Transformer::new(&variables, false);
 
         let id_node = Identifier {
             name: "kumiko".to_string(),
@@ -144,7 +159,7 @@ mod tests {
     fn transform_template_body() {
         let mut variables = HashMap::with_capacity(1);
         variables.insert("kumiko".to_string(), "reina".to_string());
-        let transformer = Transformer::from(&variables);
+        let transformer = Transformer::new(&variables, false);
 
         let id_node = Identifier {
             name: "kumiko".to_string(),

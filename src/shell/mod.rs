@@ -263,18 +263,20 @@ impl Shell {
         match program {
             Some(program) => {
                 let exit_code = {
-                    let transformer = Transformer::from(&self.globals);
-                    let arguments = command
-                        .parameters
-                        .map(|p| transformer.transform(p))
-                        .unwrap_or_default();
                     match program {
-                        Program::Builtin(program) => program.run(
-                            &self.terminal,
-                            &mut self.executables,
-                            &mut self.globals,
-                            arguments,
-                        ),
+                        Program::Builtin(program) => {
+                            let transformer = Transformer::new(&self.globals, false);
+                            let arguments = command
+                                .parameters
+                                .map(|p| transformer.transform(p))
+                                .unwrap_or_default();
+                            program.run(
+                                &self.terminal,
+                                &mut self.executables,
+                                &mut self.globals,
+                                arguments,
+                            )
+                        }
                         Program::Internal(_) => 0,
                         Program::External(_) => 0,
                     }
