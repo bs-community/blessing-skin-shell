@@ -9,11 +9,15 @@ use crate::terminal::Terminal;
 use crate::utils;
 use ansi_term::Color;
 use executable::Program;
+use futures::channel::oneshot::channel;
 use history::History;
+use std::cell::Cell;
 use std::collections::HashMap;
+use std::rc::Rc;
 pub use transform::Argument;
 use transform::Transformer;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::spawn_local;
 
 pub type Executables = HashMap<String, Box<dyn Fn() -> Program>>;
 pub type Vars = HashMap<String, String>;
@@ -23,11 +27,12 @@ pub type Arguments = Vec<transform::Argument>;
 pub struct Shell {
     line: String,
     line_cursor: usize,
-    terminal: Terminal,
+    terminal: Rc<Terminal>,
     executables: Executables,
     globals: Vars,
     history: History,
     suggestion: Option<String>,
+    running: Rc<Cell<bool>>,
 }
 
 #[wasm_bindgen]
@@ -55,18 +60,23 @@ impl Shell {
             "export".to_string(),
             Box::new(|| Program::Builtin(Box::new(programs::Export::default()))),
         );
+        executables.insert(
+            "curl".to_string(),
+            Box::new(|| Program::Internal(Box::new(programs::Curl::default()))),
+        );
 
         let mut globals = HashMap::with_capacity(3);
         globals.insert("?".to_string(), "0".to_string());
 
         let shell = Shell {
-            terminal,
+            terminal: Rc::new(terminal),
             line: String::with_capacity(12),
             line_cursor: 0,
             executables,
             globals,
             history: History::new(),
             suggestion: None,
+            running: Rc::new(Cell::new(false)),
         };
 
         let greet = Color::Fixed(127)
@@ -163,7 +173,9 @@ impl Shell {
             }
         }
 
-        self.output();
+        if !&self.running.get() {
+            self.output();
+        }
     }
 
     fn insert_text(&mut self, text: &str) {
@@ -257,34 +269,49 @@ impl Shell {
         self.print(&" ".repeat(size));
     }
 
+    fn set_exit_code(&mut self, code: u8) {
+        if let Some(var) = self.globals.get_mut("?") {
+            *var = format!("{}", code);
+        }
+    }
+
     fn run_command(&mut self, command: Command) {
         let name = &command.program.id.name;
         let program = self.executables.get(name).map(|getter| getter());
         match program {
-            Some(program) => {
-                let exit_code = {
-                    match program {
-                        Program::Builtin(program) => {
-                            let transformer = Transformer::new(&self.globals, false);
-                            let arguments = command
-                                .parameters
-                                .map(|p| transformer.transform(p))
-                                .unwrap_or_default();
-                            program.run(
-                                &self.terminal,
-                                &mut self.executables,
-                                &mut self.globals,
-                                arguments,
-                            )
-                        }
-                        Program::Internal(_) => 0,
-                        Program::External(_) => 0,
-                    }
-                };
-                if let Some(var) = self.globals.get_mut("?") {
-                    *var = format!("{}", exit_code);
+            Some(program) => match program {
+                Program::Builtin(program) => {
+                    let transformer = Transformer::new(&self.globals, false);
+                    let arguments = command
+                        .parameters
+                        .map(|p| transformer.transform(p))
+                        .unwrap_or_default();
+                    let exit_code = program.run(
+                        &self.terminal,
+                        &mut self.executables,
+                        &mut self.globals,
+                        arguments,
+                    );
+                    self.set_exit_code(exit_code);
                 }
-            }
+                Program::Internal(program) => {
+                    let transformer = Transformer::new(&self.globals, false);
+                    let arguments = command
+                        .parameters
+                        .map(|p| transformer.transform(p))
+                        .unwrap_or_default();
+                    self.running.set(true);
+                    let (sender, receiver) = channel::<u8>();
+                    let running = Rc::clone(&self.running);
+                    spawn_local(async move {
+                        receiver.await.expect("channel receiver failure");
+                        running.set(false);
+                    });
+                    let stdout = executable::Stdio::new(Rc::clone(&self.terminal));
+                    program.run(stdout, arguments, sender);
+                }
+                Program::External(_) => {},
+            },
             None => {
                 self.println(&format!(
                     "bsh: command not found: {}",

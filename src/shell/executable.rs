@@ -1,5 +1,38 @@
 use super::{Arguments, Executables, Vars};
 use crate::terminal::Terminal;
+use ansi_term::Color;
+use std::rc::Rc;
+use futures::channel::oneshot::Sender;
+
+pub struct Stdio {
+    terminal: Rc<Terminal>,
+}
+
+impl Stdio {
+    pub fn new(terminal: Rc<Terminal>) -> Stdio {
+        Stdio { terminal }
+    }
+
+    pub fn print(&self, data: &str) {
+        self.terminal.write(data);
+    }
+
+    pub fn println(&self, data: &str) {
+        self.print(data);
+        self.print("\r\n");
+    }
+
+    pub fn reset(&self) {
+        // Move cursor to left edge
+        self.print("\u{001b}[1000D");
+        // Clear line
+        self.print("\u{001b}[0K");
+    }
+
+    pub fn complete(self) {
+        self.print(&Color::Purple.paint("❯ ").to_string());
+    }
+}
 
 #[allow(dead_code)]
 pub enum Program {
@@ -19,9 +52,9 @@ pub trait Builtin {
 }
 
 pub trait Internal {
-    fn run(&self, arguments: Arguments) -> u8;
+    fn run(&self, stdout: Stdio, arguments: Arguments, sender: Sender<u8>);
 }
 
 pub trait External {
-    fn run(&self, arguments: Vec<String>) -> u8;
+    fn run(&self, stdout: Stdio, arguments: Vec<String>);
 }
