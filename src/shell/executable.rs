@@ -29,7 +29,7 @@ impl Stdio {
         self.print("\u{001b}[0K");
     }
 
-    pub fn complete(self) {
+    pub fn complete(&self) {
         self.print(&Color::Purple.paint("❯ ").to_string());
     }
 }
