@@ -1,8 +1,8 @@
 use super::{Arguments, Executables, Vars};
 use crate::terminal::Terminal;
 use ansi_term::Color;
-use std::rc::Rc;
 use futures::channel::oneshot::Sender;
+use std::rc::Rc;
 
 pub struct Stdio {
     terminal: Rc<Terminal>,

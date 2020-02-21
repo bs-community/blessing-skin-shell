@@ -1,3 +1,4 @@
+mod buffer;
 pub(crate) mod executable;
 mod history;
 mod renderer;
@@ -8,6 +9,7 @@ use crate::programs;
 use crate::terminal::Terminal;
 use crate::utils;
 use ansi_term::Color;
+use buffer::Buffer;
 use executable::Program;
 use futures::channel::oneshot::channel;
 use history::History;
@@ -25,8 +27,7 @@ pub type Arguments = Vec<transform::Argument>;
 
 #[wasm_bindgen]
 pub struct Shell {
-    line: String,
-    line_cursor: usize,
+    buffer: Buffer,
     terminal: Rc<Terminal>,
     executables: Executables,
     globals: Vars,
@@ -70,8 +71,7 @@ impl Shell {
 
         let shell = Shell {
             terminal: Rc::new(terminal),
-            line: String::with_capacity(12),
-            line_cursor: 0,
+            buffer: Buffer::new(),
             executables,
             globals,
             history: History::new(),
@@ -93,8 +93,6 @@ impl Shell {
     pub fn input(&mut self, data: &str) {
         utils::set_panic_hook();
 
-        let line_len = self.line.len();
-
         match data.as_bytes() {
             // line break
             [10] | [13] => {
@@ -104,85 +102,65 @@ impl Shell {
             [27] => {}
             // backspace
             [127] => {
-                if self.line_cursor > 0 {
-                    self.line_cursor -= 1;
-                    self.line.remove(self.line_cursor);
-                }
+                self.buffer.delete_left();
             }
             // arrow left
             [27, 91, 68] => {
-                if self.line_cursor > 0 {
-                    self.line_cursor -= 1;
-                }
+                self.buffer.move_left();
             }
             // arrow right
             [27, 91, 67] => {
-                if line_len > 0 && self.line_cursor < line_len {
-                    self.line_cursor += 1;
+                if !self.buffer.is_empty() && self.buffer.get_cursor() < self.buffer.len() {
+                    self.buffer.move_right();
                 } else if let Some(suggestion) = &self.suggestion {
-                    self.line.push_str(&*suggestion);
-                    self.line_cursor += suggestion.len();
+                    self.buffer.insert(&suggestion);
                     self.suggestion = None;
                 }
             }
             // arrow up
             [27, 91, 65] => {
                 if let Some(history) = self.history.up() {
-                    self.line_cursor = history.len();
-                    self.line = history;
+                    self.buffer.set(history);
                 }
             }
             // arrow down
             [27, 91, 66] => match self.history.down() {
                 Some(history) => {
-                    self.line_cursor = history.len();
-                    self.line = history;
+                    self.buffer.set(history);
                 }
                 None => {
-                    self.line.clear();
-                    self.line_cursor = 0;
+                    self.buffer.clear();
                 }
             },
             // the key "Delete"
             [27, 91, 51, 126] => {
-                if self.line_cursor < line_len {
-                    self.line.remove(self.line_cursor);
-                }
+                self.buffer.delete_right();
             }
             // the key "Home"
             [27, 91, 72] => {
-                self.line_cursor = 0;
+                self.buffer.move_to_start();
             }
             // the key "End"
             [27, 91, 70] => {
-                self.line_cursor = line_len;
+                self.buffer.move_to_end();
             }
             // double quote
             [34] => {
-                self.insert_text("\"\"");
-                self.line_cursor += 1;
+                self.buffer.insert_without_moving("\"\"");
+                self.buffer.move_right();
             }
             // single quote
             [39] => {
-                self.insert_text("''");
-                self.line_cursor += 1;
+                self.buffer.insert_without_moving("''");
+                self.buffer.move_right();
             }
             _ => {
-                self.insert_text(data);
-                self.line_cursor += data.len();
+                self.buffer.insert(data);
             }
         }
 
         if !&self.running.get() {
             self.output();
-        }
-    }
-
-    fn insert_text(&mut self, text: &str) {
-        if self.line.len() == self.line_cursor {
-            self.line.push_str(text);
-        } else {
-            self.line.insert_str(self.line_cursor, text);
         }
     }
 
@@ -194,20 +172,20 @@ impl Shell {
 
         // Write line
         self.prompt();
-        match parser::parse(&self.line) {
+        match parser::parse(self.buffer.get()) {
             Ok((command, rest)) => {
                 self.render_command(command);
                 self.print(rest);
             }
             Err(_) => {
-                self.print(&self.line);
+                self.print(self.buffer.get());
             }
         }
 
-        if self.line.is_empty() {
+        if self.buffer.is_empty() {
             self.suggestion = None;
-        } else if let Some(history) = self.history.find(&self.line) {
-            let rest = history.trim_start_matches(&self.line);
+        } else if let Some(history) = self.history.find(self.buffer.get()) {
+            let rest = history.trim_start_matches(self.buffer.get());
             self.print(&Color::Fixed(8).paint(rest).to_string());
             self.suggestion = Some(rest.to_string());
         }
@@ -215,26 +193,26 @@ impl Shell {
         // Move cursor to left edge again
         self.print("\u{001b}[1000D");
         // Move cursor to current position
-        self.print(&format!("\u{001b}[{}C", self.line_cursor + 2));
+        self.print(&format!("\u{001b}[{}C", self.buffer.get_cursor() + 2));
     }
 
     fn render_command(&self, command: Command) {
         self.print(&renderer::command(&command, &self.executables));
         if command.parameters.is_none() {
-            self.white_space(self.line_cursor - command.program.span.end.index);
+            self.white_space(self.buffer.len() - command.program.span.end.index);
         }
     }
 
     fn commit(&mut self) {
         // If we're going to clear screen, don't send new line.
-        if !self.line.starts_with("clear") {
+        if !self.buffer.get().starts_with("clear") {
             self.new_line();
         }
 
-        if &self.line != "" {
-            self.history.commit(self.line.clone());
+        if !self.buffer.is_empty() {
+            self.history.commit(self.buffer.get().to_string());
 
-            match parser::parse(&self.line) {
+            match parser::parse(&self.buffer.get()) {
                 Ok((command, _)) => {
                     self.run_command(command);
                 }
@@ -244,8 +222,7 @@ impl Shell {
             }
         }
 
-        self.line.clear();
-        self.line_cursor = 0;
+        self.buffer.clear();
     }
 
     pub(crate) fn print(&self, data: &str) {
@@ -310,7 +287,7 @@ impl Shell {
                     let stdout = executable::Stdio::new(Rc::clone(&self.terminal));
                     program.run(stdout, arguments, sender);
                 }
-                Program::External(_) => {},
+                Program::External(_) => {}
             },
             None => {
                 self.println(&format!(
