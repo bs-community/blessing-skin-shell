@@ -10,13 +10,7 @@ impl Default for Echo {
 }
 
 impl Builtin for Echo {
-    fn run(
-        &self,
-        terminal: &Terminal,
-        _: &mut Executables,
-        _: &mut Vars,
-        arguments: Arguments,
-    ) -> u8 {
+    fn run(&self, terminal: &Terminal, _: &mut Executables, _: &mut Vars, arguments: Arguments) {
         arguments.iter().for_each(|argument| {
             match argument {
                 Argument::Text(value) => terminal.write(&value),
@@ -31,7 +25,6 @@ impl Builtin for Echo {
             terminal.write(" ");
         });
         terminal.write("\r\n");
-        0
     }
 }
 
@@ -48,10 +41,7 @@ mod tests {
         let arguments = vec![];
 
         let program = Echo::default();
-        assert_eq!(
-            0,
-            program.run(&terminal, &mut executables, &mut globals, arguments)
-        );
+        program.run(&terminal, &mut executables, &mut globals, arguments);
         assert_eq!("\r\n", &terminal.get());
 
         terminal.clear();
@@ -61,10 +51,7 @@ mod tests {
             Argument::Switch("switch".to_string(), None),
             Argument::Switch("key".to_string(), Some("value".to_string())),
         ];
-        assert_eq!(
-            0,
-            program.run(&terminal, &mut executables, &mut globals, arguments)
-        );
+        program.run(&terminal, &mut executables, &mut globals, arguments);
         assert_eq!("text switch key=value \r\n", &terminal.get());
     }
 }

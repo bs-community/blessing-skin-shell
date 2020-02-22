@@ -50,14 +50,6 @@ impl Shell {
             Box::new(|| Program::Builtin(Box::new(programs::Echo::default()))),
         );
         executables.insert(
-            "true".to_string(),
-            Box::new(|| Program::Builtin(Box::new(programs::True::default()))),
-        );
-        executables.insert(
-            "false".to_string(),
-            Box::new(|| Program::Builtin(Box::new(programs::False::default()))),
-        );
-        executables.insert(
             "export".to_string(),
             Box::new(|| Program::Builtin(Box::new(programs::Export::default()))),
         );
@@ -66,14 +58,11 @@ impl Shell {
             Box::new(|| Program::Internal(Box::new(programs::Curl::default()))),
         );
 
-        let mut globals = HashMap::with_capacity(3);
-        globals.insert("?".to_string(), "0".to_string());
-
         let shell = Shell {
             terminal: Rc::new(terminal),
             buffer: Buffer::new(),
             executables,
-            globals,
+            globals: HashMap::with_capacity(3),
             history: History::new(),
             suggestion: None,
             running: Rc::new(Cell::new(false)),
@@ -246,12 +235,6 @@ impl Shell {
         self.print(&" ".repeat(size));
     }
 
-    fn set_exit_code(&mut self, code: u8) {
-        if let Some(var) = self.globals.get_mut("?") {
-            *var = format!("{}", code);
-        }
-    }
-
     fn run_command(&mut self, command: Command) {
         let name = &command.program.id.name;
         let program = self.executables.get(name).map(|getter| getter());
@@ -263,13 +246,12 @@ impl Shell {
                         .parameters
                         .map(|p| transformer.transform(p))
                         .unwrap_or_default();
-                    let exit_code = program.run(
+                    program.run(
                         &self.terminal,
                         &mut self.executables,
                         &mut self.globals,
                         arguments,
                     );
-                    self.set_exit_code(exit_code);
                 }
                 Program::Internal(program) => {
                     let transformer = Transformer::new(&self.globals, false);
@@ -294,9 +276,6 @@ impl Shell {
                     "bsh: command not found: {}",
                     Color::Red.paint(name)
                 ));
-                if let Some(var) = self.globals.get_mut("?") {
-                    *var = String::from("127");
-                }
             }
         }
     }

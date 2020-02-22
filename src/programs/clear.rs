@@ -10,9 +10,8 @@ impl Default for Clear {
 }
 
 impl Builtin for Clear {
-    fn run(&self, terminal: &Terminal, _: &mut Executables, _: &mut Vars, _: Arguments) -> u8 {
+    fn run(&self, terminal: &Terminal, _: &mut Executables, _: &mut Vars, _: Arguments) {
         terminal.clear();
-        0
     }
 }
 
@@ -32,10 +31,7 @@ mod tests {
         assert_eq!("text", &terminal.get());
 
         let program = Clear::default();
-        assert_eq!(
-            0,
-            program.run(&terminal, &mut executables, &mut globals, arguments)
-        );
+        program.run(&terminal, &mut executables, &mut globals, arguments);
         assert_eq!("", &terminal.get());
     }
 }

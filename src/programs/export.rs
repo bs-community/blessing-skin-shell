@@ -23,33 +23,29 @@ impl Builtin for Export {
         _: &mut Executables,
         globals: &mut Vars,
         arguments: Arguments,
-    ) -> u8 {
-        arguments.iter().fold(0, |exit_code, argument| {
-            let e = match argument {
+    ) {
+        arguments.iter().for_each(|argument| {
+            match argument {
                 Argument::Text(text) => {
                     let mut parts = text.splitn(2, '=');
                     let name = parts.next().unwrap_or_default();
                     if name == "" {
                         self.print_warning(terminal, "Missing variable name.".to_string());
-                        return exit_code + 1;
+                        return;
                     }
                     match parts.next() {
                         Some(value) => {
                             globals.insert(name.to_string(), value.to_string());
-                            0
                         }
                         None => {
                             self.print_warning(terminal, "Missing variable value.".to_string());
-                            1
                         }
                     }
                 }
                 Argument::Switch(key, _) => {
                     self.print_warning(terminal, format!("Invalid argument: {}", key));
-                    1
                 }
             };
-            exit_code + e
         })
     }
 }
@@ -67,10 +63,7 @@ mod tests {
         let arguments = vec![];
 
         let program = Export::default();
-        assert_eq!(
-            0,
-            program.run(&terminal, &mut executables, &mut globals, arguments)
-        );
+        program.run(&terminal, &mut executables, &mut globals, arguments);
     }
 
     #[test]
@@ -81,10 +74,7 @@ mod tests {
         let arguments = vec![Argument::Switch("s".to_string(), None)];
 
         let program = Export::default();
-        assert_eq!(
-            1,
-            program.run(&terminal, &mut executables, &mut globals, arguments)
-        );
+        program.run(&terminal, &mut executables, &mut globals, arguments);
         assert!(terminal.get().contains("Invalid argument: s"));
     }
 
@@ -96,10 +86,7 @@ mod tests {
         let arguments = vec![Argument::Text("".to_string())];
 
         let program = Export::default();
-        assert_eq!(
-            1,
-            program.run(&terminal, &mut executables, &mut globals, arguments)
-        );
+        program.run(&terminal, &mut executables, &mut globals, arguments);
         assert!(terminal.get().contains("Missing variable name."));
     }
 
@@ -111,10 +98,7 @@ mod tests {
         let arguments = vec![Argument::Text("k".to_string())];
 
         let program = Export::default();
-        assert_eq!(
-            1,
-            program.run(&terminal, &mut executables, &mut globals, arguments)
-        );
+        program.run(&terminal, &mut executables, &mut globals, arguments);
         assert!(terminal.get().contains("Missing variable value."));
     }
 
@@ -126,10 +110,7 @@ mod tests {
         let arguments = vec![Argument::Text("k=".to_string())];
 
         let program = Export::default();
-        assert_eq!(
-            0,
-            program.run(&terminal, &mut executables, &mut globals, arguments)
-        );
+        program.run(&terminal, &mut executables, &mut globals, arguments);
         assert_eq!(Some(&"".to_string()), globals.get("k"));
     }
 
@@ -141,17 +122,11 @@ mod tests {
         let arguments = vec![Argument::Text("k=v1".to_string())];
 
         let program = Export::default();
-        assert_eq!(
-            0,
-            program.run(&terminal, &mut executables, &mut globals, arguments)
-        );
+        program.run(&terminal, &mut executables, &mut globals, arguments);
         assert_eq!(Some(&"v1".to_string()), globals.get("k"));
 
         let arguments = vec![Argument::Text("k=v2".to_string())];
-        assert_eq!(
-            0,
-            program.run(&terminal, &mut executables, &mut globals, arguments)
-        );
+        program.run(&terminal, &mut executables, &mut globals, arguments);
         assert_eq!(Some(&"v2".to_string()), globals.get("k"));
     }
 }

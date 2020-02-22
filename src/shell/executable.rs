@@ -48,7 +48,7 @@ pub trait Builtin {
         executables: &mut Executables,
         globals: &mut Vars,
         arguments: Arguments,
-    ) -> u8;
+    );
 }
 
 pub trait Internal {
