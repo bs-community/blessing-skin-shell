@@ -1,6 +1,7 @@
 mod parser;
 mod programs;
 mod shell;
+mod stdio;
 mod terminal;
 mod utils;
 

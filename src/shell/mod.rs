@@ -6,20 +6,17 @@ pub(crate) mod transform;
 
 use crate::parser::{self, ast::Command};
 use crate::programs;
+use crate::stdio::Stdio;
 use crate::terminal::Terminal;
 use crate::utils;
 use ansi_term::Color;
 use buffer::Buffer;
-use executable::Program;
-use futures::channel::oneshot::channel;
+use executable::{Program, Runner};
 use history::History;
-use std::cell::Cell;
 use std::collections::HashMap;
 use std::rc::Rc;
 pub use transform::Argument;
-use transform::Transformer;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::spawn_local;
 
 pub type Executables = HashMap<String, Box<dyn Fn() -> Program>>;
 pub type Vars = HashMap<String, String>;
@@ -33,7 +30,8 @@ pub struct Shell {
     globals: Vars,
     history: History,
     suggestion: Option<String>,
-    running: Rc<Cell<bool>>,
+    runner: Runner,
+    stdio: Rc<Stdio>,
 }
 
 #[wasm_bindgen]
@@ -58,23 +56,25 @@ impl Shell {
             Box::new(|| Program::Internal(Box::new(programs::Curl::default()))),
         );
 
+        let terminal = Rc::new(terminal);
+        let stdio = Rc::new(Stdio::new(Rc::clone(&terminal)));
+
         let shell = Shell {
-            terminal: Rc::new(terminal),
+            terminal,
             buffer: Buffer::new(),
             executables,
             globals: HashMap::with_capacity(3),
             history: History::new(),
             suggestion: None,
-            running: Rc::new(Cell::new(false)),
+            runner: Runner::new(),
+            stdio,
         };
 
         let greet = Color::Fixed(127)
-            .paint("Welcome to Blessing Skin Shell!")
+            .paint("Welcome to Blessing Skin Shell!\r\n")
             .to_string();
-        shell.print(&greet);
-        shell.new_line();
-        shell.new_line();
-        shell.prompt();
+        shell.stdio.println(&greet);
+        shell.stdio.prompt();
 
         shell
     }
@@ -148,26 +148,23 @@ impl Shell {
             }
         }
 
-        if !&self.running.get() {
+        if !self.runner.is_running() {
             self.output();
         }
     }
 
     fn output(&mut self) {
-        // Move cursor to left edge
-        self.print("\u{001b}[1000D");
-        // Clear line
-        self.print("\u{001b}[0K");
+        self.stdio.reset();
 
         // Write line
-        self.prompt();
+        self.stdio.prompt();
         match parser::parse(self.buffer.get()) {
             Ok((command, rest)) => {
                 self.render_command(command);
-                self.print(rest);
+                self.stdio.print(rest);
             }
             Err(_) => {
-                self.print(self.buffer.get());
+                self.stdio.print(self.buffer.get());
             }
         }
 
@@ -175,18 +172,20 @@ impl Shell {
             self.suggestion = None;
         } else if let Some(history) = self.history.find(self.buffer.get()) {
             let rest = history.trim_start_matches(self.buffer.get());
-            self.print(&Color::Fixed(8).paint(rest).to_string());
+            self.stdio.print(&Color::Fixed(8).paint(rest).to_string());
             self.suggestion = Some(rest.to_string());
         }
 
         // Move cursor to left edge again
-        self.print("\u{001b}[1000D");
+        self.stdio.print("\u{001b}[1000D");
         // Move cursor to current position
-        self.print(&format!("\u{001b}[{}C", self.buffer.get_cursor() + 2));
+        self.stdio
+            .print(&format!("\u{001b}[{}C", self.buffer.get_cursor() + 2));
     }
 
     fn render_command(&self, command: Command) {
-        self.print(&renderer::command(&command, &self.executables));
+        self.stdio
+            .print(&renderer::command(&command, &self.executables));
         if command.parameters.is_none() {
             self.white_space(self.buffer.len() - command.program.span.end.index);
         }
@@ -195,7 +194,7 @@ impl Shell {
     fn commit(&mut self) {
         // If we're going to clear screen, don't send new line.
         if !self.buffer.get().starts_with("clear") {
-            self.new_line();
+            self.stdio.println("");
         }
 
         if !self.buffer.is_empty() {
@@ -206,7 +205,7 @@ impl Shell {
                     self.run_command(command);
                 }
                 Err(e) => {
-                    self.println(&format!("bsh: syntax error: {}", e));
+                    self.stdio.println(&format!("bsh: syntax error: {}", e));
                 }
             }
         }
@@ -214,25 +213,8 @@ impl Shell {
         self.buffer.clear();
     }
 
-    pub(crate) fn print(&self, data: &str) {
-        self.terminal.write(data);
-    }
-
-    pub(crate) fn println(&self, data: &str) {
-        self.terminal.write(data);
-        self.new_line();
-    }
-
-    fn prompt(&self) {
-        self.print(Color::Purple.paint("❯ ").to_string().as_ref());
-    }
-
-    pub(crate) fn new_line(&self) {
-        self.print("\r\n");
-    }
-
     fn white_space(&self, size: usize) {
-        self.print(&" ".repeat(size));
+        self.stdio.print(&" ".repeat(size));
     }
 
     fn run_command(&mut self, command: Command) {
@@ -241,38 +223,26 @@ impl Shell {
         match program {
             Some(program) => match program {
                 Program::Builtin(program) => {
-                    let transformer = Transformer::new(&self.globals, false);
-                    let arguments = command
-                        .parameters
-                        .map(|p| transformer.transform(p))
-                        .unwrap_or_default();
-                    program.run(
-                        &self.terminal,
+                    self.runner.run_builtin(
+                        program,
+                        command.parameters,
+                        &Rc::clone(&self.terminal),
                         &mut self.executables,
                         &mut self.globals,
-                        arguments,
                     );
                 }
                 Program::Internal(program) => {
-                    let transformer = Transformer::new(&self.globals, false);
-                    let arguments = command
-                        .parameters
-                        .map(|p| transformer.transform(p))
-                        .unwrap_or_default();
-                    self.running.set(true);
-                    let (sender, receiver) = channel::<u8>();
-                    let running = Rc::clone(&self.running);
-                    spawn_local(async move {
-                        receiver.await.expect("channel receiver failure");
-                        running.set(false);
-                    });
-                    let stdout = executable::Stdio::new(Rc::clone(&self.terminal));
-                    program.run(stdout, arguments, sender);
+                    self.runner.run_internal(
+                        program,
+                        command.parameters,
+                        &self.globals,
+                        Rc::clone(&self.stdio),
+                    );
                 }
                 Program::External(_) => {}
             },
             None => {
-                self.println(&format!(
+                self.stdio.println(&format!(
                     "bsh: command not found: {}",
                     Color::Red.paint(name)
                 ));

@@ -1,9 +1,8 @@
-use crate::shell::{
-    executable::{Internal, Stdio},
-    Argument, Arguments,
-};
+use crate::shell::{executable::Internal, Argument, Arguments};
+use crate::stdio::Stdio;
 use futures::channel::oneshot::Sender;
 use js_sys::Reflect;
+use std::rc::Rc;
 use wasm_bindgen::{prelude::*, JsCast};
 use wasm_bindgen_futures::{spawn_local, JsFuture};
 use web_sys::Response;
@@ -25,13 +24,13 @@ impl Default for Curl {
 }
 
 impl Internal for Curl {
-    fn run(&self, stdio: Stdio, arguments: Arguments, sender: Sender<u8>) {
+    fn run(&self, stdio: Rc<Stdio>, arguments: Arguments, exit: Sender<()>) {
         spawn_local(async move {
             let url = match arguments.get(0) {
                 Some(url) => url,
                 None => {
                     stdio.println("No URL is provided.");
-                    sender.send(1).expect("sender failure");
+                    exit.send(()).expect("sender failure");
                     return;
                 }
             };
@@ -39,22 +38,20 @@ impl Internal for Curl {
                 Argument::Text(t) => t.clone(),
                 Argument::Switch(_, _) => {
                     stdio.println("No URL is provided.");
-                    sender.send(1).expect("sender failure");
+                    exit.send(()).expect("sender failure");
                     return;
                 }
             };
 
-            let exit_code = match fetch(&url).await {
+            match fetch(&url).await {
                 Ok(text) => match text.as_string() {
                     Some(text) => {
                         let text = text.replace("\n", "\r\n");
                         stdio.reset();
                         stdio.println(&text);
-                        0
                     }
                     None => {
                         stdio.println("conversion failed");
-                        1
                     }
                 },
                 Err(e) => {
@@ -64,11 +61,9 @@ impl Internal for Curl {
                         .as_string()
                         .unwrap_or_else(|| String::from("connection failed"));
                     stdio.println(&message);
-                    1
                 }
             };
-            stdio.complete();
-            sender.send(exit_code).expect("sender failure");
+            exit.send(()).expect("sender failure");
         });
     }
 }

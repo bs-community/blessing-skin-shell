@@ -1,38 +1,12 @@
+use super::transform::Transformer;
 use super::{Arguments, Executables, Vars};
+use crate::parser::ast::Parameters;
+use crate::stdio::Stdio;
 use crate::terminal::Terminal;
-use ansi_term::Color;
-use futures::channel::oneshot::Sender;
+use futures::channel::oneshot::{channel, Sender};
+use std::cell::Cell;
 use std::rc::Rc;
-
-pub struct Stdio {
-    terminal: Rc<Terminal>,
-}
-
-impl Stdio {
-    pub fn new(terminal: Rc<Terminal>) -> Stdio {
-        Stdio { terminal }
-    }
-
-    pub fn print(&self, data: &str) {
-        self.terminal.write(data);
-    }
-
-    pub fn println(&self, data: &str) {
-        self.print(data);
-        self.print("\r\n");
-    }
-
-    pub fn reset(&self) {
-        // Move cursor to left edge
-        self.print("\u{001b}[1000D");
-        // Clear line
-        self.print("\u{001b}[0K");
-    }
-
-    pub fn complete(&self) {
-        self.print(&Color::Purple.paint("❯ ").to_string());
-    }
-}
+use wasm_bindgen_futures::spawn_local;
 
 #[allow(dead_code)]
 pub enum Program {
@@ -52,9 +26,65 @@ pub trait Builtin {
 }
 
 pub trait Internal {
-    fn run(&self, stdout: Stdio, arguments: Arguments, sender: Sender<u8>);
+    fn run(&self, stdout: Rc<Stdio>, arguments: Arguments, exit: Sender<()>);
 }
 
 pub trait External {
     fn run(&self, stdout: Stdio, arguments: Vec<String>);
+}
+
+pub struct Runner {
+    running: Rc<Cell<bool>>,
+}
+
+impl Runner {
+    pub fn new() -> Self {
+        Runner {
+            running: Rc::new(Cell::new(false)),
+        }
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.running.get()
+    }
+
+    pub fn run_builtin(
+        &self,
+        program: Box<dyn Builtin>,
+        parameters: Option<Parameters>,
+        terminal: &Terminal,
+        executables: &mut Executables,
+        globals: &mut Vars,
+    ) {
+        let transformer = Transformer::new(&globals, false);
+        let arguments = parameters
+            .map(|p| transformer.transform(p))
+            .unwrap_or_default();
+        program.run(terminal, executables, globals, arguments);
+    }
+
+    pub fn run_internal(
+        &mut self,
+        program: Box<dyn Internal>,
+        parameters: Option<Parameters>,
+        globals: &Vars,
+        stdio: Rc<Stdio>,
+    ) {
+        self.running.set(true);
+
+        let transformer = Transformer::new(&globals, false);
+        let arguments = parameters
+            .map(|p| transformer.transform(p))
+            .unwrap_or_default();
+
+        let (sender, receiver) = channel::<()>();
+        program.run(Rc::clone(&stdio), arguments, sender);
+
+        let running = Rc::clone(&self.running);
+        spawn_local(async move {
+            receiver.await.expect("channel receiver failure");
+            running.set(false);
+            stdio.prompt();
+        });
+    }
 }
