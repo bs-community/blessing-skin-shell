@@ -14,3 +14,23 @@ impl Builtin for False {
         1
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn run() {
+        let terminal = Terminal::new();
+        let mut executables = HashMap::new();
+        let mut globals = HashMap::new();
+        let arguments = vec![];
+
+        let program = False::default();
+        assert_eq!(
+            1,
+            program.run(&terminal, &mut executables, &mut globals, arguments)
+        );
+    }
+}

@@ -22,13 +22,49 @@ impl Builtin for Echo {
                 Argument::Text(value) => terminal.write(&value),
                 Argument::Switch(key, value) => {
                     terminal.write(key);
-                    terminal.write("=");
-                    terminal.write(value.as_deref().unwrap_or(""));
+                    if let Some(value) = value {
+                        terminal.write("=");
+                        terminal.write(&value);
+                    }
                 }
             }
             terminal.write(" ");
         });
         terminal.write("\r\n");
         0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn run() {
+        let terminal = Terminal::new();
+        let mut executables = HashMap::new();
+        let mut globals = HashMap::new();
+        let arguments = vec![];
+
+        let program = Echo::default();
+        assert_eq!(
+            0,
+            program.run(&terminal, &mut executables, &mut globals, arguments)
+        );
+        assert_eq!("\r\n", &terminal.get());
+
+        terminal.clear();
+
+        let arguments = vec![
+            Argument::Text("text".to_string()),
+            Argument::Switch("switch".to_string(), None),
+            Argument::Switch("key".to_string(), Some("value".to_string())),
+        ];
+        assert_eq!(
+            0,
+            program.run(&terminal, &mut executables, &mut globals, arguments)
+        );
+        assert_eq!("text switch key=value \r\n", &terminal.get());
     }
 }

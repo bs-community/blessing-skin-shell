@@ -15,3 +15,27 @@ impl Builtin for Clear {
         0
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn run() {
+        let terminal = Terminal::new();
+        let mut executables = HashMap::new();
+        let mut globals = HashMap::new();
+        let arguments = vec![];
+
+        terminal.write("text");
+        assert_eq!("text", &terminal.get());
+
+        let program = Clear::default();
+        assert_eq!(
+            0,
+            program.run(&terminal, &mut executables, &mut globals, arguments)
+        );
+        assert_eq!("", &terminal.get());
+    }
+}
