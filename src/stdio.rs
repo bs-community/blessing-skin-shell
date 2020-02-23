@@ -16,15 +16,18 @@ impl Stdio {
 
 #[wasm_bindgen]
 impl Stdio {
+    /// Print text to the terminal.
     pub fn print(&self, data: &str) {
         self.terminal.write(data);
     }
 
+    /// Print text to the terminal, with a line break (CRLF).
     pub fn println(&self, data: &str) {
         self.print(data);
         self.print("\r\n");
     }
 
+    /// Reset current line and move cursor to the start.
     pub fn reset(&self) {
         // Move cursor to left edge
         self.print("\u{001b}[1000D");
@@ -32,6 +35,7 @@ impl Stdio {
         self.print("\u{001b}[0K");
     }
 
+    /// Print the prompt.
     pub fn prompt(&self) {
         self.print(&Color::Purple.paint("❯ ").to_string());
     }

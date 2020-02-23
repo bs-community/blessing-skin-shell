@@ -79,6 +79,7 @@ impl Shell {
         shell
     }
 
+    /// Send input data to the Shell.
     pub fn input(&mut self, data: &str) {
         utils::set_panic_hook();
 
@@ -259,6 +260,10 @@ impl Shell {
     }
 
     #[wasm_bindgen(js_name = "addExternal")]
+    /// Register a new external JavaScript program.
+    ///
+    /// The program must be an instance of a JavaScript class
+    /// which has a method call `run`.
     pub fn add_external(&mut self, name: String, program: ExternalProgram) {
         let external = Program::External(executable::External::new(program));
         self.executables.insert(name, external);
