@@ -157,3 +157,26 @@ impl Runner {
         });
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::programs::Echo;
+    use std::collections::HashMap;
+
+    #[test]
+    fn run_builtin() {
+        let terminal = Terminal::new();
+        let mut executables = HashMap::new();
+        let mut globals = HashMap::new();
+        let runner = Runner::new();
+
+        runner.run_builtin(
+            Box::new(Echo::default()),
+            None,
+            &terminal,
+            &mut executables,
+            &mut globals,
+        );
+    }
+}
