@@ -7,6 +7,7 @@
 - Removed "exit code" feature.
 - Removed `true` command.
 - Removed `false` command.
+- Added support executing external JavaScript code.
 
 ## v0.1.0
 
