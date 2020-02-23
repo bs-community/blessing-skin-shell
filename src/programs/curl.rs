@@ -55,15 +55,16 @@ impl Internal for Curl {
                     }
                 },
                 Err(e) => {
-                    let message =
-                        Reflect::get(&e, &JsValue::from("message")).expect("should have message");
-                    let message = message
-                        .as_string()
-                        .unwrap_or_else(|| String::from("connection failed"));
+                    let message = Reflect::get(&e, &JsValue::from("message"))
+                        .ok()
+                        .and_then(|message| message.as_string())
+                        .unwrap_or_else(|| "unknown error".to_string());
                     stdio.println(&message);
                 }
             };
-            exit.send(()).expect("sender failure");
+            if exit.send(()).is_err() {
+                stdio.println("Program is hang up...Please refresh the page.");
+            }
         });
     }
 }

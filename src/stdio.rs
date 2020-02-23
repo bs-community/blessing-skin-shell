@@ -1,7 +1,9 @@
 use crate::terminal::Terminal;
 use ansi_term::Color;
 use std::rc::Rc;
+use wasm_bindgen::prelude::*;
 
+#[wasm_bindgen]
 pub struct Stdio {
     terminal: Rc<Terminal>,
 }
@@ -10,7 +12,10 @@ impl Stdio {
     pub fn new(terminal: Rc<Terminal>) -> Stdio {
         Stdio { terminal }
     }
+}
 
+#[wasm_bindgen]
+impl Stdio {
     pub fn print(&self, data: &str) {
         self.terminal.write(data);
     }

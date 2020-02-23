@@ -11,14 +11,14 @@ use crate::terminal::Terminal;
 use crate::utils;
 use ansi_term::Color;
 use buffer::Buffer;
-use executable::{Program, Runner};
+use executable::{ExternalProgram, Program, Runner};
 use history::History;
 use std::collections::HashMap;
 use std::rc::Rc;
 pub use transform::Argument;
 use wasm_bindgen::prelude::*;
 
-pub type Executables = HashMap<String, Box<dyn Fn() -> Program>>;
+pub type Executables = HashMap<String, Program>;
 pub type Vars = HashMap<String, String>;
 pub type Arguments = Vec<transform::Argument>;
 
@@ -38,22 +38,22 @@ pub struct Shell {
 impl Shell {
     #[wasm_bindgen(constructor)]
     pub fn new(terminal: Terminal) -> Shell {
-        let mut executables: HashMap<String, Box<dyn Fn() -> Program>> = HashMap::with_capacity(10);
+        let mut executables = HashMap::with_capacity(10);
         executables.insert(
             "clear".to_string(),
-            Box::new(|| Program::Builtin(Box::new(programs::Clear::default()))),
+            Program::Builtin(Box::new(|| Box::new(programs::Clear::default()))),
         );
         executables.insert(
             "echo".to_string(),
-            Box::new(|| Program::Builtin(Box::new(programs::Echo::default()))),
+            Program::Builtin(Box::new(|| Box::new(programs::Echo::default()))),
         );
         executables.insert(
             "export".to_string(),
-            Box::new(|| Program::Builtin(Box::new(programs::Export::default()))),
+            Program::Builtin(Box::new(|| Box::new(programs::Export::default()))),
         );
         executables.insert(
             "curl".to_string(),
-            Box::new(|| Program::Internal(Box::new(programs::Curl::default()))),
+            Program::Internal(Box::new(|| Box::new(programs::Curl::default()))),
         );
 
         let terminal = Rc::new(terminal);
@@ -219,12 +219,12 @@ impl Shell {
 
     fn run_command(&mut self, command: Command) {
         let name = &command.program.id.name;
-        let program = self.executables.get(name).map(|getter| getter());
+        let program = self.executables.get(name);
         match program {
             Some(program) => match program {
                 Program::Builtin(program) => {
                     self.runner.run_builtin(
-                        program,
+                        program(),
                         command.parameters,
                         &Rc::clone(&self.terminal),
                         &mut self.executables,
@@ -233,13 +233,21 @@ impl Shell {
                 }
                 Program::Internal(program) => {
                     self.runner.run_internal(
-                        program,
+                        program(),
                         command.parameters,
                         &self.globals,
                         Rc::clone(&self.stdio),
                     );
                 }
-                Program::External(_) => {}
+                Program::External(program) => {
+                    self.runner.run_external(
+                        &program,
+                        command.parameters,
+                        Rc::clone(&self.terminal),
+                        &self.globals,
+                        Rc::clone(&self.stdio),
+                    );
+                }
             },
             None => {
                 self.stdio.println(&format!(
@@ -248,5 +256,11 @@ impl Shell {
                 ));
             }
         }
+    }
+
+    #[wasm_bindgen(js_name = "addExternal")]
+    pub fn add_external(&mut self, name: String, program: ExternalProgram) {
+        let external = Program::External(executable::External::new(program));
+        self.executables.insert(name, external);
     }
 }

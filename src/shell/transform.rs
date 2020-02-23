@@ -27,6 +27,16 @@ impl<'a> Transformer<'a> {
             .collect()
     }
 
+    pub fn to_texts(&self, arguments: Vec<Argument>) -> Vec<String> {
+        arguments
+            .into_iter()
+            .map(|argument| match argument {
+                Argument::Text(t) => t,
+                Argument::Switch(_, _) => unreachable!(),
+            })
+            .collect()
+    }
+
     fn parameter(&self, parameter: Parameter) -> Argument {
         let Parameter { param, .. } = parameter;
 
