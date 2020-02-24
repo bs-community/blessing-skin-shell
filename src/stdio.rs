@@ -12,6 +12,10 @@ impl Stdio {
     pub fn new(terminal: Rc<Terminal>) -> Stdio {
         Stdio { terminal }
     }
+
+    pub fn prompt(&self) {
+        self.print(&Color::Purple.paint("❯ ").to_string());
+    }
 }
 
 #[wasm_bindgen]
@@ -33,11 +37,6 @@ impl Stdio {
         self.print("\u{001b}[1000D");
         // Clear line
         self.print("\u{001b}[0K");
-    }
-
-    /// Print the prompt.
-    pub fn prompt(&self) {
-        self.print(&Color::Purple.paint("❯ ").to_string());
     }
 }
 
