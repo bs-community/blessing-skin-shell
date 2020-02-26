@@ -6,7 +6,6 @@ mod tests;
 
 use ast::*;
 use combine::{
-    error::StringStreamError,
     parser::{
         char::{alpha_num, space, spaces, string},
         choice::{choice, optional},
@@ -14,15 +13,19 @@ use combine::{
         repeat::{many, many1, sep_end_by1, skip_many1},
         sequence::between,
         token::{one_of, position, satisfy, token},
+        EasyParser,
     },
-    stream::position::Stream,
-    Parser,
+    stream::{self, easy, Positioned, Stream},
+    ParseError, Parser,
 };
 use pos::Position;
 
-type Input<'a> = Stream<&'a str, Position>;
-
-fn identifier<'a>() -> impl Parser<Input<'a>, Output = Identifier> {
+fn identifier<Input>() -> impl Parser<Input, Output = Identifier>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     (
         position(),
         many1(choice((alpha_num(), one_of("_?!".chars())))),
@@ -34,7 +37,12 @@ fn identifier<'a>() -> impl Parser<Input<'a>, Output = Identifier> {
         })
 }
 
-fn loose_identifer<'a>() -> impl Parser<Input<'a>, Output = Identifier> {
+fn loose_identifer<Input>() -> impl Parser<Input, Output = Identifier>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     (
         position(),
         many1(choice((alpha_num(), one_of("_?!-.".chars())))),
@@ -46,14 +54,24 @@ fn loose_identifer<'a>() -> impl Parser<Input<'a>, Output = Identifier> {
         })
 }
 
-fn variable<'a>() -> impl Parser<Input<'a>, Output = Variable> {
+fn variable<Input>() -> impl Parser<Input, Output = Variable>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     (position(), token('$'), identifier(), position()).map(|(start, _, id, end)| {
         let span = Span { start, end };
         Variable { id, span }
     })
 }
 
-fn template_literal<'a>(quoted: bool) -> impl Parser<Input<'a>, Output = TemplateLiteral> {
+fn template_literal<Input>(quoted: bool) -> impl Parser<Input, Output = TemplateLiteral>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     let value_parser = many1(satisfy(move |c: char| {
         let space = quoted || !c.is_whitespace();
         let quote = quoted || "'#".chars().all(|x| x != c);
@@ -69,7 +87,12 @@ fn template_literal<'a>(quoted: bool) -> impl Parser<Input<'a>, Output = Templat
     })
 }
 
-fn single_dollar<'a>() -> impl Parser<Input<'a>, Output = TemplateLiteral> {
+fn single_dollar<Input>() -> impl Parser<Input, Output = TemplateLiteral>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     (position(), token('$'), position()).map(|(start, value, end): (_, char, _)| {
         let span = Span { start, end };
         let value = value.to_string();
@@ -77,7 +100,12 @@ fn single_dollar<'a>() -> impl Parser<Input<'a>, Output = TemplateLiteral> {
     })
 }
 
-fn template_part<'a>(quoted: bool) -> impl Parser<Input<'a>, Output = TemplatePart> {
+fn template_part<Input>(quoted: bool) -> impl Parser<Input, Output = TemplatePart>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     let template_literal = template_literal(quoted).map(TemplatePart::Raw);
     let variable = variable().map(TemplatePart::Variable);
     let dollar = single_dollar().map(TemplatePart::Raw);
@@ -88,7 +116,12 @@ fn template_part<'a>(quoted: bool) -> impl Parser<Input<'a>, Output = TemplatePa
     ))
 }
 
-fn template_body<'a>(quoted: bool) -> impl Parser<Input<'a>, Output = TemplateBody> {
+fn template_body<Input>(quoted: bool) -> impl Parser<Input, Output = TemplateBody>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     let parser = if quoted {
         // If we're in a quoted string, it can be an empty string.
         many(template_part(quoted)).left()
@@ -101,30 +134,60 @@ fn template_body<'a>(quoted: bool) -> impl Parser<Input<'a>, Output = TemplateBo
     })
 }
 
-fn unquoted<'a>() -> impl Parser<Input<'a>, Output = Template> {
+fn unquoted<Input>() -> impl Parser<Input, Output = Template>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     template_body(false).map(Template::Unquoted)
 }
 
-fn double_quoted<'a>() -> impl Parser<Input<'a>, Output = Template> {
+fn double_quoted<Input>() -> impl Parser<Input, Output = Template>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     between(token('"'), token('"'), template_body(true)).map(Template::Double)
 }
 
-fn raw_text<'a>() -> impl Parser<Input<'a>, Output = RawText> {
+fn raw_text<Input>() -> impl Parser<Input, Output = RawText>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     (position(), many(satisfy(|c| c != '\'')), position()).map(|(start, text, end)| {
         let span = Span { start, end };
         RawText { text, span }
     })
 }
 
-fn single_quoted<'a>() -> impl Parser<Input<'a>, Output = Template> {
+fn single_quoted<Input>() -> impl Parser<Input, Output = Template>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     between(token('\''), token('\''), raw_text()).map(Template::Single)
 }
 
-fn template<'a>() -> impl Parser<Input<'a>, Output = Template> {
+fn template<Input>() -> impl Parser<Input, Output = Template>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     choice((single_quoted(), double_quoted(), unquoted()))
 }
 
-fn switch<'a>() -> impl Parser<Input<'a>, Output = Switch> {
+fn switch<Input>() -> impl Parser<Input, Output = Switch>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     (
         position(),
         loose_identifer(),
@@ -138,26 +201,51 @@ fn switch<'a>() -> impl Parser<Input<'a>, Output = Switch> {
         })
 }
 
-fn param_literal<'a>() -> impl Parser<Input<'a>, Output = ParamLiteral> {
+fn param_literal<Input>() -> impl Parser<Input, Output = ParamLiteral>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     (position(), template(), position()).map(|(start, literal, end)| {
         let span = Span { start, end };
         ParamLiteral { literal, span }
     })
 }
 
-fn literal<'a>() -> impl Parser<Input<'a>, Output = Param> {
+fn literal<Input>() -> impl Parser<Input, Output = Param>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     param_literal().map(Param::Literal)
 }
 
-fn long_switch<'a>() -> impl Parser<Input<'a>, Output = Param> {
+fn long_switch<Input>() -> impl Parser<Input, Output = Param>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     (string("--"), switch()).map(|(_, switch)| Param::LongSwitch(switch))
 }
 
-fn short_switch<'a>() -> impl Parser<Input<'a>, Output = Param> {
+fn short_switch<Input>() -> impl Parser<Input, Output = Param>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     (token('-'), switch()).map(|(_, switch)| Param::ShortSwitch(switch))
 }
 
-fn param<'a>() -> impl Parser<Input<'a>, Output = Param> {
+fn param<Input>() -> impl Parser<Input, Output = Param>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     choice((
         attempt(short_switch()),
         attempt(long_switch()),
@@ -165,14 +253,24 @@ fn param<'a>() -> impl Parser<Input<'a>, Output = Param> {
     ))
 }
 
-fn parameter<'a>() -> impl Parser<Input<'a>, Output = Parameter> {
+fn parameter<Input>() -> impl Parser<Input, Output = Parameter>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     (position(), param(), position()).map(|(start, param, end)| {
         let span = Span { start, end };
         Parameter { param, span }
     })
 }
 
-fn parameters<'a>() -> impl Parser<Input<'a>, Output = Parameters> {
+fn parameters<Input>() -> impl Parser<Input, Output = Parameters>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     (
         position(),
         sep_end_by1(parameter(), skip_many1(space())),
@@ -184,14 +282,24 @@ fn parameters<'a>() -> impl Parser<Input<'a>, Output = Parameters> {
         })
 }
 
-fn program<'a>() -> impl Parser<Input<'a>, Output = Program> {
+fn program<Input>() -> impl Parser<Input, Output = Program>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     (position(), loose_identifer(), position()).map(|(start, id, end)| {
         let span = Span { start, end };
         Program { id, span }
     })
 }
 
-fn command<'a>() -> impl Parser<Input<'a>, Output = Command> {
+fn command<Input>() -> impl Parser<Input, Output = Command>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     (
         position(),
         program(),
@@ -209,7 +317,12 @@ fn command<'a>() -> impl Parser<Input<'a>, Output = Command> {
         })
 }
 
-fn comment<'a>() -> impl Parser<Input<'a>, Output = Comment> {
+fn comment<Input>() -> impl Parser<Input, Output = Comment>
+where
+    Input: Stream<Token = char, Position = Position>,
+    Input::Error: ParseError<Input::Token, Input::Range, Input::Position>,
+    Input: Positioned,
+{
     (
         token('#'),
         position(),
@@ -222,10 +335,15 @@ fn comment<'a>() -> impl Parser<Input<'a>, Output = Comment> {
         })
 }
 
-pub fn parse(input: &str) -> Result<(Command, &str), StringStreamError> {
+pub fn parse_interactive(
+    input: &str,
+) -> Result<(Command, &str), easy::Errors<char, &str, Position>> {
     spaces()
         .with(command())
-        .skip(optional(comment()))
-        .parse(Stream::with_positioner(input, Position::new()))
+        .skip(comment())
+        .easy_parse(stream::position::Stream::with_positioner(
+            input,
+            Position::new(),
+        ))
         .map(|x| (x.0, x.1.input))
 }

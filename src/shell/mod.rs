@@ -159,7 +159,7 @@ impl Shell {
 
         // Write line
         self.stdio.prompt();
-        match parser::parse(self.buffer.get()) {
+        match parser::parse_interactive(self.buffer.get()) {
             Ok((command, rest)) => {
                 self.render_command(command);
                 self.stdio.print(rest);
@@ -201,12 +201,25 @@ impl Shell {
         if !self.buffer.is_empty() {
             self.history.commit(self.buffer.get().to_string());
 
-            match parser::parse(&self.buffer.get()) {
+            match parser::parse_interactive(&self.buffer.get()) {
                 Ok((command, _)) => {
                     self.run_command(command);
                 }
-                Err(e) => {
-                    self.stdio.println(&format!("bsh: syntax error: {}", e));
+                Err(err) => {
+                    let unexpected = err
+                        .errors
+                        .iter()
+                        .take(1)
+                        .map(|e| {
+                            let mut msg = format!("{}", e);
+                            msg.make_ascii_lowercase();
+                            msg
+                        })
+                        .fold(String::new(), |output, msg| output + &msg);
+                    self.stdio.println(&format!(
+                        "bsh: syntax error at {}, {}",
+                        err.position, unexpected
+                    ));
                 }
             }
         }

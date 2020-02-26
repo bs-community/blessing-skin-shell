@@ -1,4 +1,5 @@
 use combine::stream::position::{Positioner, RangePositioner};
+use std::fmt::{self, Display};
 
 #[derive(Clone, Debug, PartialOrd, Ord, PartialEq, Eq)]
 pub struct Position {
@@ -14,6 +15,12 @@ impl Default for Position {
             column: 1,
             index: 0,
         }
+    }
+}
+
+impl Display for Position {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "line {}, column {}", self.line, self.column)
     }
 }
 
