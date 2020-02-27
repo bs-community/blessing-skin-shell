@@ -340,7 +340,7 @@ pub fn parse_interactive(
 ) -> Result<(Command, &str), easy::Errors<char, &str, Position>> {
     spaces()
         .with(command())
-        .skip(comment())
+        .skip(optional(comment()))
         .easy_parse(stream::position::Stream::with_positioner(
             input,
             Position::new(),
