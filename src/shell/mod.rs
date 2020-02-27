@@ -11,8 +11,9 @@ use crate::terminal::Terminal;
 use crate::utils;
 use ansi_term::Color;
 use buffer::Buffer;
-use executable::{ExternalProgram, Program, Runner};
+use executable::{Program, Runner};
 use history::History;
+use js_sys::Function;
 use std::collections::HashMap;
 use std::rc::Rc;
 pub use transform::Argument;
@@ -273,12 +274,9 @@ impl Shell {
     }
 
     #[wasm_bindgen(js_name = "addExternal")]
-    /// Register a new external JavaScript program.
-    ///
-    /// The program must be an instance of a JavaScript class
-    /// which has a method call `run`.
-    pub fn add_external(&mut self, name: String, program: ExternalProgram) {
-        let external = Program::External(executable::External::new(program));
+    /// Register a new external JavaScript function.
+    pub fn add_external(&mut self, name: String, func: Function) {
+        let external = Program::External(executable::External::new(func));
         self.executables.insert(name, external);
     }
 }

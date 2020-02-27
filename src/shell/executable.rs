@@ -4,7 +4,7 @@ use crate::parser::ast::Parameters;
 use crate::stdio::Stdio;
 use crate::terminal::Terminal;
 use futures::channel::oneshot::{channel, Sender};
-use js_sys::{Promise, Reflect};
+use js_sys::{Function, Promise, Reflect};
 use std::cell::Cell;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
@@ -30,29 +30,21 @@ pub trait Internal {
     fn run(&self, stdout: Rc<Stdio>, arguments: Arguments, exit: Sender<()>);
 }
 
-#[wasm_bindgen]
-extern "C" {
-    pub type ExternalProgram;
-
-    #[wasm_bindgen(catch, method)]
-    pub fn run(this: &ExternalProgram, stdio: Stdio, args: JsValue) -> Result<JsValue, JsValue>;
-}
-
 pub struct External {
-    program: ExternalProgram,
+    function: Function,
 }
 
 impl External {
-    pub fn new(program: ExternalProgram) -> Self {
-        External { program }
+    pub fn new(function: Function) -> Self {
+        External { function }
     }
 
     pub fn run(&self, terminal: Rc<Terminal>, arguments: Vec<String>, exit: Sender<()>) {
         let stdio = Stdio::new(Rc::clone(&terminal));
-        let program = &self.program;
+        let f = &self.function;
         let arguments =
             serde_wasm_bindgen::to_value(&arguments).expect("arguments conversion failed");
-        let result = match program.run(stdio, arguments) {
+        let result = match f.call2(&JsValue::NULL, &JsValue::from(stdio), &arguments) {
             Ok(value) => value,
             Err(e) => {
                 let message = Reflect::get(&e, &JsValue::from("message"))
