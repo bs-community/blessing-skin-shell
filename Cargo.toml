@@ -41,6 +41,7 @@ features = [
 ]
 
 [dev-dependencies]
+itertools = "0.8"
 wasm-bindgen-test = "0.2"
 
 [profile.release]
