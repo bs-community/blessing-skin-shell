@@ -8,6 +8,7 @@
 - Removed `true` command.
 - Removed `false` command.
 - Added support executing external JavaScript code.
+- Improved parsing error message.
 
 ## v0.1.0
 
