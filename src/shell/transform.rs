@@ -42,13 +42,18 @@ impl<'a> Transformer<'a> {
 
         match param {
             Param::Literal(literal) => Argument::Text(self.template(literal.literal)),
-            Param::LongSwitch(switch) | Param::ShortSwitch(switch) => self.switch(switch),
+            Param::LongSwitch(switch) => self.switch(switch, true),
+            Param::ShortSwitch(switch) => self.switch(switch, false),
         }
     }
 
-    fn switch(&self, switch: Switch) -> Argument {
+    fn switch(&self, switch: Switch, long: bool) -> Argument {
         if self.text_only {
-            Argument::Text(self.switch_to_text(switch))
+            Argument::Text(format!(
+                "{}{}",
+                if long { "--" } else { "-" },
+                self.switch_to_text(switch),
+            ))
         } else {
             let pair = self.switch_to_pair(switch);
             Argument::Switch(pair.0, pair.1)
@@ -64,8 +69,9 @@ impl<'a> Transformer<'a> {
 
     fn switch_to_text(&self, switch: Switch) -> String {
         format!(
-            "{}={}",
+            "{}{}{}",
             switch.name.name,
+            if switch.value.is_some() { "=" } else { "" },
             switch
                 .value
                 .map(|tpl| self.template(tpl))
@@ -179,14 +185,251 @@ mod tests {
             span: Span::default(),
         };
 
-        let mut parts = Vec::with_capacity(2);
-        parts.push(TemplatePart::Variable(var_node));
-        parts.push(TemplatePart::Raw(literal_node));
         let node = TemplateBody {
-            parts,
+            parts: vec![
+                TemplatePart::Variable(var_node),
+                TemplatePart::Raw(literal_node),
+            ],
             span: Span::default(),
         };
 
         assert_eq!(transformer.template_body(node), "reina&kumiko");
+    }
+
+    #[test]
+    fn transform_template_unquoted() {
+        let node = Template::Unquoted(TemplateBody {
+            parts: vec![
+                TemplatePart::Raw(TemplateLiteral {
+                    value: "kumiko".to_string(),
+                    span: Span::default(),
+                }),
+                TemplatePart::Variable(Variable {
+                    id: Identifier {
+                        name: "nope".to_string(),
+                        span: Span::default(),
+                    },
+                    span: Span::default(),
+                }),
+            ],
+            span: Span::default(),
+        });
+
+        let variables = HashMap::new();
+        let transformer = Transformer::new(&variables, false);
+        assert_eq!(transformer.template(node), "kumiko");
+    }
+
+    #[test]
+    fn transform_template_single() {
+        let node = Template::Single(RawText {
+            text: "t".to_string(),
+            span: Span::default(),
+        });
+
+        let variables = HashMap::new();
+        let transformer = Transformer::new(&variables, false);
+        assert_eq!(transformer.template(node), "t");
+    }
+
+    #[test]
+    fn transform_template_double() {
+        let node = Template::Double(TemplateBody {
+            parts: vec![
+                TemplatePart::Raw(TemplateLiteral {
+                    value: "kumiko".to_string(),
+                    span: Span::default(),
+                }),
+                TemplatePart::Variable(Variable {
+                    id: Identifier {
+                        name: "var".to_string(),
+                        span: Span::default(),
+                    },
+                    span: Span::default(),
+                }),
+            ],
+            span: Span::default(),
+        });
+
+        let mut variables = HashMap::new();
+        variables.insert("var".to_string(), "-".to_string());
+        let transformer = Transformer::new(&variables, false);
+        assert_eq!(transformer.template(node), "kumiko-");
+    }
+
+    #[test]
+    fn transform_switch_to_pair() {
+        let sw = Switch {
+            name: Identifier {
+                name: "key".to_string(),
+                span: Span::default(),
+            },
+            value: None,
+            span: Span::default(),
+        };
+        let variables = HashMap::new();
+        let transformer = Transformer::new(&variables, false);
+
+        if let Argument::Switch(key, value) = transformer.switch(sw, true) {
+            assert_eq!(key, "key".to_string());
+            assert_eq!(value, None);
+        } else {
+            unreachable!();
+        }
+
+        let sw = Switch {
+            name: Identifier {
+                name: "key".to_string(),
+                span: Span::default(),
+            },
+            value: Some(Template::Single(RawText {
+                text: "value".to_string(),
+                span: Span::default(),
+            })),
+            span: Span::default(),
+        };
+        let variables = HashMap::new();
+        let transformer = Transformer::new(&variables, false);
+
+        if let Argument::Switch(key, value) = transformer.switch(sw, false) {
+            assert_eq!(key, "key".to_string());
+            assert_eq!(value, Some("value".to_string()));
+        } else {
+            unreachable!();
+        }
+    }
+
+    #[test]
+    fn transform_switch_to_text() {
+        let sw = Switch {
+            name: Identifier {
+                name: "key".to_string(),
+                span: Span::default(),
+            },
+            value: None,
+            span: Span::default(),
+        };
+        let variables = HashMap::new();
+        let transformer = Transformer::new(&variables, true);
+        if let Argument::Text(text) = transformer.switch(sw, true) {
+            assert_eq!(text, "--key".to_string());
+        } else {
+            unreachable!();
+        }
+
+        let sw = Switch {
+            name: Identifier {
+                name: "key".to_string(),
+                span: Span::default(),
+            },
+            value: Some(Template::Single(RawText {
+                text: "value".to_string(),
+                span: Span::default(),
+            })),
+            span: Span::default(),
+        };
+        let variables = HashMap::new();
+        let transformer = Transformer::new(&variables, true);
+        if let Argument::Text(text) = transformer.switch(sw, false) {
+            assert_eq!(text, "-key=value".to_string());
+        } else {
+            unreachable!();
+        }
+    }
+
+    #[test]
+    fn transform_parameter() {
+        let param = Parameter {
+            param: Param::Literal(ParamLiteral {
+                literal: Template::Single(RawText {
+                    text: "t".to_string(),
+                    span: Span::default(),
+                }),
+                span: Span::default(),
+            }),
+            span: Span::default(),
+        };
+        let variables = HashMap::new();
+        let transformer = Transformer::new(&variables, true);
+
+        if let Argument::Text(text) = transformer.parameter(param) {
+            assert_eq!(text, "t".to_string());
+        } else {
+            unreachable!();
+        }
+
+        let param = Parameter {
+            param: Param::LongSwitch(Switch {
+                name: Identifier {
+                    name: "t".to_string(),
+                    span: Span::default(),
+                },
+                value: None,
+                span: Span::default(),
+            }),
+            span: Span::default(),
+        };
+        let variables = HashMap::new();
+        let transformer = Transformer::new(&variables, true);
+
+        if let Argument::Text(text) = transformer.parameter(param) {
+            assert_eq!(text, "--t".to_string());
+        } else {
+            unreachable!();
+        }
+
+        let param = Parameter {
+            param: Param::ShortSwitch(Switch {
+                name: Identifier {
+                    name: "t".to_string(),
+                    span: Span::default(),
+                },
+                value: None,
+                span: Span::default(),
+            }),
+            span: Span::default(),
+        };
+        let variables = HashMap::new();
+        let transformer = Transformer::new(&variables, true);
+
+        if let Argument::Text(text) = transformer.parameter(param) {
+            assert_eq!(text, "-t".to_string());
+        } else {
+            unreachable!();
+        }
+    }
+
+    #[test]
+    fn from_parameters_to_text() {
+        let params = Parameters {
+            params: vec![
+                Parameter {
+                    param: Param::Literal(ParamLiteral {
+                        literal: Template::Single(RawText {
+                            text: "1".to_string(),
+                            span: Span::default(),
+                        }),
+                        span: Span::default(),
+                    }),
+                    span: Span::default(),
+                },
+                Parameter {
+                    param: Param::Literal(ParamLiteral {
+                        literal: Template::Single(RawText {
+                            text: "2".to_string(),
+                            span: Span::default(),
+                        }),
+                        span: Span::default(),
+                    }),
+                    span: Span::default(),
+                },
+            ],
+            span: Span::default(),
+        };
+        let variables = HashMap::new();
+        let transformer = Transformer::new(&variables, true);
+
+        let text = transformer.to_texts(transformer.transform(params));
+        assert_eq!("12", &text.join(""));
     }
 }
