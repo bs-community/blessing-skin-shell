@@ -241,6 +241,9 @@ impl Shell {
             }
         }
 
+        // force to show cursor
+        self.stdio.print("\u{001b}[?25h");
+
         self.buffer.clear();
     }
 
