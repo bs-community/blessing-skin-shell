@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add symbols utility.
+
 ## v0.2.1
 
 - Don't accept input when program is running.
