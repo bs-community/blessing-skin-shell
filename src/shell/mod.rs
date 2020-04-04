@@ -84,6 +84,10 @@ impl Shell {
     pub fn input(&mut self, data: &str) {
         utils::set_panic_hook();
 
+        if self.runner.is_running() {
+            return;
+        }
+
         match data.as_bytes() {
             // line break
             [10] | [13] => {
