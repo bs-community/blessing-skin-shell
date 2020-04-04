@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.3.0
+
 - Add symbols utility.
 - Force to show cursor after running program.
 
