@@ -63,6 +63,7 @@ impl External {
             if future.await.is_err() {
                 terminal.write("\r\n");
             };
+            terminal.write("\u{001b}[?25h");
             exit.send(()).expect("sender failure");
         });
     }

@@ -2,9 +2,13 @@
 
 ## Unreleased
 
+## v0.3.1
+
+- Fixed showing cursor.
+
 ## v0.3.0
 
-- Add symbols utility.
+- Added symbols utility.
 - Force to show cursor after running program.
 
 ## v0.2.1
