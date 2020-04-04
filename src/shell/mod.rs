@@ -91,6 +91,18 @@ impl Shell {
         match data.as_bytes() {
             // line break
             [10] | [13] => {
+                self.stdio.reset();
+                self.stdio.prompt();
+                match parser::parse_interactive(self.buffer.get()) {
+                    Ok((command, rest)) => {
+                        self.render_command(command);
+                        self.stdio.print(rest);
+                    }
+                    Err(_) => {
+                        self.stdio.print(self.buffer.get());
+                    }
+                }
+
                 self.commit();
             }
             // the key "Esc", do nothing

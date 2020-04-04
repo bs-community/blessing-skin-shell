@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Don't accept input when program is running.
+- Don't render suggestion after submit a command.
 
 ## v0.2.0
 
