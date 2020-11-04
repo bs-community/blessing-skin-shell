@@ -1,7 +1,7 @@
 [package]
 name = "blessing-skin-shell"
 description = "CLI Shell for Blessing Skin."
-version = "0.3.2"
+version = "0.3.3"
 authors = ["Pig Fang <g-plane@hotmail.com>"]
 edition = "2018"
 license = "MIT"
