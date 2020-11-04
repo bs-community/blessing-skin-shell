@@ -15,7 +15,7 @@ default = ["wee_alloc"]
 
 [dependencies]
 ansi_term = "0.12"
-combine = "4.0"
+combine = "4.3"
 futures = "0.3"
 js-sys = "0.3"
 serde-wasm-bindgen = "0.1"
